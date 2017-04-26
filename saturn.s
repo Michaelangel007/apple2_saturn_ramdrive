@@ -213,8 +213,8 @@ LC_EXIT   PHP                 ;SAVE THE STATUS REGISTER
           BIT  LCBNK1WE
           PLP                 ;RESTORE THE STATUS REG.
           RTS                 ;AND RETURN
-;
-          DS   >*-*,0 ; **sigh** cc65 range error: bugfix: >0-* to >*-*
+;                        ; note: merlin32 users could use: DS \
+          DS   $100-<*,0 ; bugfix: >0-* to $100-<*
 OS        EQU  $D000-*        ;OFFSET TO LANGUAGE CARD
 ;
 CHCK_CMD  BIT  LCBNK2WE       ;ENSURE BANK 2 IS SELECTED
@@ -356,6 +356,7 @@ T1        DB   0              ;DATA 1
 T2        DB   0              ;DATA 2
 RWR_END   EQU  *
 ;
-          DS   >0-*,0
+          DS   $100-<*,0 ; bugfix: >0-*,0
 BW_BUFR   EQU  *              ;I/O BUFFER
 
+; NOTE: 512 bytes are used, but not allocated on disk
