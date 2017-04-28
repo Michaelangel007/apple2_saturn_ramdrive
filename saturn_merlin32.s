@@ -85,12 +85,12 @@ NXTBLK16  LDX  LC_INDEX,Y     ;TEST FOR RAMCARD
           BNE  INSTALL        ;IF NOT 0 THEN INSTALL
           SEC                 ;ELSE FLAG AN ERROR
 TESTRTN   RTS                 ; AND QUIT
-; C08x Saturn Bank 0,1,2,3 and 4,5,6,7 acess
+; C08x Saturn Bank 0,1,2,3 and 4,5,6,7 access
 LC_INDEX  DB   $4,$5,$6,$7,$C,$D,$E,$F
 BLKSIZE   DW   0,0,0,96,0,0,0,224
 
-INSTALL   STX  _MAXBLK+1      ;SET I/O ROUTINE              ; bugfix:
-          STA  _MAXBLK        ; MAX BLOCK                   ; bugfix:
+INSTALL   STX  _MAXBLK+1      ;SET I/O ROUTINE          ; reloc: MAX_BLK
+          STA  _MAXBLK        ; MAX BLOCK               ; reloc: MAX_BLK
           STX  B2_D+1+$2A     ;SET DIRECTORY
           STA  B2_D+1+$29     ; MAX BLOCK
           CPY  #3*2           ;IF 64K RAMCARD
@@ -111,8 +111,8 @@ MOV_DATE  LDA  DATE,Y         ;MOVE IT TO DIRECTORY
 DO_MOVE1  BIT  ROMBNK2WE
           BIT  ROMBNK2WE
           LDY  #0
-MOVE1     LDA  CHCK_beg,Y    ;MOVE I/O ROUTINE   ; bugfix: load address
-          STA  CHCK_CMD,Y    ; TO BANK 2 @ $D000 ; bugfix: final address CHCK_CMD+OS
+MOVE1     LDA  _CHCKCMD,Y    ;MOVE I/O ROUTINE          ; reloc: load address
+          STA  CHCK_CMD,Y    ; TO BANK 2 @ $D000        ; reloc: final address CHCK_CMD+OS
           INY
           BNE  MOVE1
           LDY  #15
@@ -132,7 +132,7 @@ MOVE2     LDA  LC_ENTER,Y     ;MOVE LC_ENTER
           LDX  #<B2_D
           LDY  #>B2_D
           JSR  WR_BLOCK
-          LDA  #3             ;LAST DIRCETORY BLOCK
+          LDA  #3             ;LAST DIRECTORY BLOCK     ; spelling: DIRCETORY
           LDX  #<B3_D
           LDY  #>B3_D
           JSR  WR_BLOCK
@@ -175,7 +175,7 @@ B2_D      DB   B2_END-*-1
           DW   0              ;PREVIOUS.DIRECTORY.BLOCK
           DW   3              ;NEXT.DIRECTORY.BLOCK
 VTYPE     DB   $F3            ;VTYPE/VN.LEN
-VNAME     ASC  'RAM'          ; ASCII
+VNAME     ASC  'RAM'          ;VNAME
           DS   VNAME+15-*,0
           DS   8,0            ;RESERVED
           DW   0              ;CREATION.DATE
@@ -217,11 +217,11 @@ LC_EXIT   PHP                 ;SAVE THE STATUS REGISTER
           PLP                 ;RESTORE THE STATUS REG.
           RTS                 ;AND RETURN
 
-; bugfix: don't waste disk space with useless padding
-          DS \,0
+; TODO: don't waste disk space with useless padding
+          DS \,0                                        ; bugfix: DS   >0-*
 
 ; We need the load address in low RAM to move to high RAM
-CHCK_beg  EQU *
+_CHCKCMD  EQU *
 ;
 ; Driver in LC
 ;
@@ -256,10 +256,10 @@ _MAXBLK   EQU  *-OS+MAIN+$200                           ; HACK: magic number $20
 MAX_BLK   DW   0              ;NUMBER OF BLOCKS
 ;
 RD_WR     LDA  BLK_NUM+1      ;CHECK VALID BLOCK NUM
-          CMP  MAX_BLK+1                                ; bugfix: +OS
+          CMP  MAX_BLK+1                                ; reloc: +OS
           BNE  RD_WR2
           LDA  BLK_NUM
-          CMP  MAX_BLK        ;IF GREATER THAN          ; bugfix: +OS
+          CMP  MAX_BLK        ;IF GREATER THAN          ; reloc: +OS
 RD_WR2    BCS  IO_EXIT        ; MARK AS I/O ERROR...
           PHA
           LSR  A              ;GET RAMCARD
@@ -268,8 +268,8 @@ RD_WR2    BCS  IO_EXIT        ; MARK AS I/O ERROR...
           LSR  A
           LSR  A
           TAY
-          LDA  B16TBL,Y       ;CONVERT TO I/O ADDRESS   ; bugfix: +OS
-          STA  RC_BLK+1                                 ; bugfix: +OS
+          LDA  B16TBL,Y       ;CONVERT TO I/O ADDRESS   ; reloc: +OS
+          STA  RC_BLK+1                                 ; reloc: +OS
           PLA
           AND  #%00011111     ;GET BLOCK NUMBER
           CMP  #8
@@ -279,67 +279,67 @@ NO_FIX    PHA
           LDA  #<LCBNK2WE                               ; bugfix: #LCBNK2WE
           BCC  NO_FIX2
           LDA  #<LCBNK1WE                               ; bugfix: #LCBNK1WE
-NO_FIX2   STA  RC_BNK+1                                 ; bugfix: +OS
+NO_FIX2   STA  RC_BNK+1                                 ; reloc: +OS
           PLA
           ASL  A
           ADC  #$C0           ;AND RAMCARD ADDRESS
           TAX
           LDA  CMD
-          AND  #%00000010     ;SETUP RAMCARD POINTERS ;;;u 2256
+          AND  #%00000010     ;SETUP RAMCARD POINTERS
           TAY
           LDA  #00
-          STA  S1,Y                                     ; bugfix: S1+OS
-          STA  S2,Y                                     ; bugfix: S1+OS
+          STA  S1,Y                                     ; reloc: S1+OS
+          STA  S2,Y                                     ; reloc: S1+OS
           TXA
-          STA  S1+1,Y                                   ; bugfix: S1+OS+1
+          STA  S1+1,Y                                   ; reloc: S1+OS+1
           INX
           TXA
-          STA  S2+1,Y                                   ; bugfix: S1+OS+1
+          STA  S2+1,Y                                   ; reloc: S1+OS+1
           TYA
           ASL
           ASL
           ASL
           TAY
 RC_BLK    LDA  #00
-          STA  MOVLOOP+1,Y                              ; bugfix: MOVLOOP+OS+1
+          STA  MOVLOOP+1,Y                              ; reloc: MOVLOOP+OS+1
 RC_BNK    LDA  #00
-          STA  MOVLOOP+4,Y                              ; bugfix: MOVLOOP+OS+4
+          STA  MOVLOOP+4,Y                              ; reloc: MOVLOOP+OS+4
           LDA  CMD
           EOR  #%00000011     ;SETUP MAIN MEM. POINTERS
           AND  #%00000010
           TAY
           LDX  BUFFER+1
           LDA  BUFFER
-          STA  S1,Y                                         ; bugfix: S1+OS
-          STA  S2,Y                                         ; bugfix: S2+OS
+          STA  S1,Y                                     ; reloc: S1+OS
+          STA  S2,Y                                     ; reloc: S2+OS
           TXA
-          STA  S1+1,Y                                       ; bugfix: S1+OS+1
+          STA  S1+1,Y                                   ; reloc: S1+OS+1
           INX
           TXA
-          STA  S2+1,Y                                       ; bugfix: S2+OS+1
+          STA  S2+1,Y                                   ; reloc: S2+OS+1
           TYA
           ASL
           ASL
           ASL
           TAY
-          LDA  #<LCBNK1WE                                   ; bugfix: #LCBNK1WE
-          STA  MOVLOOP+1,Y                                  ; bugfix: MOVLOOP+OS+1
-          LDA  #<BLK0                                       ; bugfix: #BLK0
-          STA  MOVLOOP+4,Y                                  ; bugfix: MOVLOOP+OS+4
+          LDA  #<LCBNK1WE                               ; bugfix: #LCBNK1WE
+          STA  MOVLOOP+1,Y                              ; reloc: MOVLOOP+OS+1
+          LDA  #<BLK0                                   ; bugfix: #BLK0
+          STA  MOVLOOP+4,Y                              ; reloc: MOVLOOP+OS+4
           PHP
           SEI                 ;DISABLE INTERUPTS
-          JSR  SWAP           ;PUT R/W IN ZPAGE             ; bugfix: SWAP+OS
+          JSR  SWAP           ;PUT R/W IN ZPAGE         ; reloc: SWAP+OS
           JSR  ZPAGE          ; DO READ/WRITE
-          JSR  SWAP           ;PUT ZPAGE BACK               ; bugfix: SWAP+OS
+          JSR  SWAP           ;PUT ZPAGE BACK           ; reloc: SWAP+OS
           PLP                 ;RESTORE INTERUPT FLAG
-          JMP  STATUS2        ;AND EXIT                     ; bugfix: STATUS2+OS
+          JMP  STATUS2        ;AND EXIT                 ; reloc: STATUS2+OS
 ;
 B16TBL    DB   $85,$86,$87,$8C,$8D,$8E,$8F
 ;
 SWAP      LDY  #RWR_END-RWR   ;GET LENGTH OF RWR
-SWAP2     LDX  RWR,Y          ;AND SWAP ZPAGE               ; bugfix: RWR+OS
+SWAP2     LDX  RWR,Y          ;AND SWAP ZPAGE           ; reloc: RWR+OS
           LDA  ZPAGE,Y        ; WITH RWR
-          STA  RWR,Y                                        ; bugfix: RWR+OS
+          STA  RWR,Y                                    ; reloc: RWR+OS
           STX  ZPAGE,Y
           DEY
           BPL  SWAP2
@@ -347,23 +347,23 @@ SWAP2     LDX  RWR,Y          ;AND SWAP ZPAGE               ; bugfix: RWR+OS
 ;
 
 ; work around merlin32 bug
-T1_DST EQU $34 ; bugfix: T1-RWR
-T2_DST EQU $35 ; bugfix: T2-RWR
+T1_DST EQU $34 ; reloc: T1-RWR
+T2_DST EQU $35 ; reloc: T2-RWR
 
-RWR       LDY  #00            ;INIT INDEX POINTER           ; $22C9
-MOVLOOP   BIT  LC             ;ENABLE SOURCE                ; *** SELF-MODIFIED by RC_BLK
-          BIT  LC                                           ; *** SELF-MODIFIED by RC_BNK
-          LDA (S1-RWR),Y      ;GET THE DATA                 ; ($2C) bugfix: DB   LDA,S1-RWR
-          STA: T1_DST                                       ;orginal used 16-bit store, merlin equivalent: STA: T1_DST
-          LDA (S2-RWR),Y                                    ; ($34) bugfix: DB   LDA,S2-RWR
-          STA: T2_DST                                       ;orginal used 16-bit store, merlin equivalent: STA: T2_DST
+RWR       LDY  #00            ;INIT INDEX POINTER       ; $22C9
+MOVLOOP   BIT  LC             ;ENABLE SOURCE            ; *** SELF-MODIFIED by RC_BLK
+          BIT  LC                                       ; *** SELF-MODIFIED by RC_BNK
+          LDA (S1-RWR),Y      ;GET THE DATA             ; ($2C) bugfix: DB   LDA,S1-RWR
+          STA: T1_DST                                   ; force 16-bit store, merlin32 syntax: STA: T1_DST
+          LDA (S2-RWR),Y                                ; ($34) bugfix: DB   LDA,S2-RWR
+          STA: T2_DST                                   ; force 16-bit store
 
           BIT  LC             ;ENABLE DESTINATION
           BIT  LC
-          LDA: T1_DST         ;SAVE THE DATA
-          STA (D1-RWR),Y                                    ; bugfix: DB   STA,D1-RWR
-          LDA: T2_DST                                       ; bugfix: redundant load
-          STA (D2-RWR),Y                                    ; bugfix: DB   STA,D2-RWR
+          LDA: T1_DST         ;SAVE THE DATA            ; force 16-bit load
+          STA (D1-RWR),Y                                ; bugfix: DB   STA,D1-RWR
+          LDA: T2_DST                                   ; force 16-bit load, NOTE: redundant load if order swapped
+          STA (D2-RWR),Y                                ; bugfix: DB   STA,D2-RWR
 
           INY                 ;DONE?
           BNE  MOVLOOP        ;NO...
@@ -379,7 +379,7 @@ T1        DB   0              ;DATA 1
 T2        DB   0              ;DATA 2
 RWR_END   EQU  *
 ;
-          DS   \,0
+          DS   \,0                                      ; bugfix: >0-*,0
 
 _BWBUFR   EQU  *-OS+MAIN+$200                           ; HACK: magic number $200 due to page alignment
 BW_BUFR   EQU  *              ;I/O BUFFER
