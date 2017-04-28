@@ -1,9 +1,9 @@
-; Converted to Merlin32 by Michaelangel007
+; Converted by Michaelangel007
+; ca65 version
 ;   https://github.com/Michaelangel007/apple2_saturn_ramdrive
 ; Originally from:
 ;   http://mirrors.apple2.org.za/apple.cabi.net/FAQs.and.INFO/LanguagesAndProgramming/saturn.ram.src.txt
-; Comment out for cc65
-;.include "fix_cc65.s"
+.include "fix_ca65.s"
 
 ;
 ;ProDOS.disk.driver
@@ -58,7 +58,8 @@ BLK0      EQU  LC+$4
 ROMBNK1WE EQU  LC+$9
 BLK7      EQU  LC+$F
 ;
-          ORG $2000
+MAIN      EQU  $2000
+          ORG  MAIN
           LST  ON,NOA,NOV,GEN
 ;
           LDY  #7
@@ -85,17 +86,17 @@ NXTBLK16  LDX  LC_INDEX,Y     ;TEST FOR RAMCARD
           BNE  INSTALL        ;IF NOT 0 THEN INSTALL
           SEC                 ;ELSE FLAG AN ERROR
 TESTRTN   RTS                 ; AND QUIT
-;
+; C08x Saturn Bank 0,1,2,3 and 4,5,6,7 access
 LC_INDEX  DB   $4,$5,$6,$7,$C,$D,$E,$F
 BLKSIZE   DW   0,0,0,96,0,0,0,224
 
-INSTALL   STX  MAX_BLK+1      ;SET I/O ROUTINE
-          STA  MAX_BLK        ; MAX BLOCK
-          STX  B2_D+1+$2A     ;SET DIRECTORY 
+INSTALL   STX  _MAXBLK+1      ;SET I/O ROUTINE          ; reloc: MAX_BLK
+          STA  _MAXBLK        ; MAX BLOCK               ; reloc: MAX_BLK
+          STX  B2_D+1+$2A     ;SET DIRECTORY
           STA  B2_D+1+$29     ; MAX BLOCK
           CPY  #3*2           ;IF 64K RAMCARD
           BNE  VBM128
-          LDY  B1_96          ;USE 96 BLOCK VBM 
+          LDY  B1_96          ;USE 96 BLOCK VBM
 SET_VBM   LDA  B1_96,Y
           STA  B1_D,Y
           DEY
@@ -111,8 +112,8 @@ MOV_DATE  LDA  DATE,Y         ;MOVE IT TO DIRECTORY
 DO_MOVE1  BIT  ROMBNK2WE
           BIT  ROMBNK2WE
           LDY  #0
-MOVE1     LDA  CHCK_CMD,Y     ;MOVE I/O ROUTINE
-          STA  CHCK_CMD+OS,Y  ; TO BANK 2 @ $D000
+MOVE1     LDA  _CHCKCMD,Y    ;MOVE I/O ROUTINE          ; reloc: load address
+          STA  CHCK_CMD,Y    ; TO BANK 2 @ $D000        ; reloc: final address CHCK_CMD+OS
           INY
           BNE  MOVE1
           LDY  #15
@@ -132,7 +133,7 @@ MOVE2     LDA  LC_ENTER,Y     ;MOVE LC_ENTER
           LDX  #<B2_D
           LDY  #>B2_D
           JSR  WR_BLOCK
-          LDA  #3             ;LAST DIRCETORY BLOCK
+          LDA  #3             ;LAST DIRECTORY BLOCK     ; spelling: DIRCETORY
           LDX  #<B3_D
           LDY  #>B3_D
           JSR  WR_BLOCK
@@ -150,15 +151,15 @@ WR_BLOCK  STA  WR_BLK_P+4     ;SETUP BLK_NUM
           STY  LENGTH+1
           STX  MOVDATA+2
           STY  MOVDATA+1
-          LDY  #0 
+          LDY  #0                                       ; $20DC
           LDA  #0
-ZBUFR     STA  BW_BUFR,Y      ;ZERO I/O BUFFER
-          STA  BW_BUFR+256,Y
+ZBUFR     STA  _BWBUFR,Y      ;ZERO I/O BUFFER          ; reloc: BW_BUFR
+          STA  _BWBUFR+256,Y                            ; reloc: BW_BUFR
           INY
           BNE  ZBUFR
-LENGTH    LDX  BW_BUFR        ;GET LENGTH OF INFO
-MOVDATA   LDA  BW_BUFR,X
-          STA  BW_BUFR-1,X    ;MOVE DATA TO I/O BUFFER
+LENGTH    LDX  _BWBUFR        ;GET LENGTH OF INFO       ; reloc: BW_BUFR
+MOVDATA   LDA  _BWBUFR,X                                ; reloc: BW_BUFR
+          STA  _BWBUFR-1,X    ;MOVE DATA TO I/O BUFFER  ; reloc: BW_BUFR
           DEX
           BNE  MOVDATA
           JSR  MLI            ;AND WRITE IT TO /RAM
@@ -168,14 +169,14 @@ MOVDATA   LDA  BW_BUFR,X
 ;
 WR_BLK_P  DB   3              ;NUMBER OF PARAMETERS
           DB   $30            ;SLOT/DRIVE NUMBER
-          DW   BW_BUFR        ;DATA BUFFER
+          DW   _BWBUFR        ;DATA BUFFER              ; reloc: BW_BUFR
           DW   0000           ;BLOCK NUMBER
 ;
 B2_D      DB   B2_END-*-1
           DW   0              ;PREVIOUS.DIRECTORY.BLOCK
           DW   3              ;NEXT.DIRECTORY.BLOCK
 VTYPE     DB   $F3            ;VTYPE/VN.LEN
-VNAME     ASC  "RAM"          ;VNAME ; bugfix: VNAME     ASC  'RAM'          ;VNAME
+VNAME     ASC  "RAM"          ;VNAME                    ; stupid ca65 missing support for '...'
           DS   VNAME+15-*,0
           DS   8,0            ;RESERVED
           DW   0              ;CREATION.DATE
@@ -205,17 +206,32 @@ B1_96     DB   B1_96END-*-1
           DS   11,$FF         ;ALL THE REST ARE FREE
 B1_96END  EQU  *
 ;
+; Driver Entry
+; These 16 bytes needs to live somewhere in main RAM $0000..$BFFF
+;
 LC_ENTER  CLD                 ;ALL ROUTINE BEGIN WITH
           BIT  LCBNK2WE       ;ENABLE BANK 2
-          JSR  CHCK_CMD+OS    ; AND GOTO IT
+          JSR  CHCK_CMD       ; AND GOTO IT
 LC_EXIT   PHP                 ;SAVE THE STATUS REGISTER
           BIT  LCBNK1WE       ;ENABLE BANK 1
           BIT  LCBNK1WE
           PLP                 ;RESTORE THE STATUS REG.
           RTS                 ;AND RETURN
-;                        ; note: merlin32 users could use: DS \
-          DS   $100-<*,0 ; bugfix: >0-* to $100-<*
-OS        EQU  $D000-*        ;OFFSET TO LANGUAGE CARD
+
+; TODO: don't waste disk space with useless padding
+          DS   $100-<*,0                                ; bugfix: DS   >0-*
+
+; We need the load address in low RAM to move to high RAM
+_CHCKCMD  EQU *
+;
+; Driver in LC
+;
+;
+; There is no need to clutter up the code with +OS when we
+; already have a directive that will automatically do that for us.
+;OS        EQU  $D000-*        ;OFFSET TO LANGUAGE CARD
+OS        EQU  $D000          ;Install Address in LANGUAGE CARD, Bank 2
+          ORG  OS
 ;
 CHCK_CMD  BIT  LCBNK2WE       ;ENSURE BANK 2 IS SELECTED
           LDA  CMD            ;GET THE COMMAND
@@ -231,19 +247,20 @@ IO_EXIT   LDA  #IO_EC         ;ITS AN I/O ERROR
           SEC
           RTS
 ;
-STATUS    LDY  MAX_BLK+OS+1   ;GET VOLUME SIZE
-          LDX  MAX_BLK+OS
+STATUS    LDY  MAX_BLK+1      ;GET VOLUME SIZE  ;bugfix +OS
+          LDX  MAX_BLK                          ;bugfix +OS
 STATUS2   LDA  #NO_EC         ;AND RETURN
           CLC
           RTS
 ;
+_MAXBLK   EQU  *-OS+MAIN+$200                           ; HACK: magic number $200 due to page alignment
 MAX_BLK   DW   0              ;NUMBER OF BLOCKS
 ;
 RD_WR     LDA  BLK_NUM+1      ;CHECK VALID BLOCK NUM
-          CMP  MAX_BLK+OS+1
+          CMP  MAX_BLK+1                                ; reloc: +OS
           BNE  RD_WR2
           LDA  BLK_NUM
-          CMP  MAX_BLK+OS     ;IF GREATER THAN
+          CMP  MAX_BLK        ;IF GREATER THAN          ; reloc: +OS
 RD_WR2    BCS  IO_EXIT        ; MARK AS I/O ERROR...
           PHA
           LSR  A              ;GET RAMCARD
@@ -252,18 +269,18 @@ RD_WR2    BCS  IO_EXIT        ; MARK AS I/O ERROR...
           LSR  A
           LSR  A
           TAY
-          LDA  B16TBL+OS,Y    ;CONVERT TO I/O ADDRESS
-          STA  RC_BLK+OS+1
+          LDA  B16TBL,Y       ;CONVERT TO I/O ADDRESS   ; reloc: +OS
+          STA  RC_BLK+1                                 ; reloc: +OS
           PLA
           AND  #%00011111     ;GET BLOCK NUMBER
           CMP  #8
           BCS  NO_FIX         ;SET CORRECT BANK
           ADC  #8
 NO_FIX    PHA
-          LDA  LCBNK2WE ; bugfix: #
+          LDA  #<LCBNK2WE                               ; bugfix: #LCBNK2WE
           BCC  NO_FIX2
-          LDA  LCBNK1WE ; bugfix: #
-NO_FIX2   STA  RC_BNK+OS+1
+          LDA  #<LCBNK1WE                               ; bugfix: #LCBNK1WE
+NO_FIX2   STA  RC_BNK+1                                 ; reloc: +OS
           PLA
           ASL  A
           ADC  #$C0           ;AND RAMCARD ADDRESS
@@ -272,76 +289,83 @@ NO_FIX2   STA  RC_BNK+OS+1
           AND  #%00000010     ;SETUP RAMCARD POINTERS
           TAY
           LDA  #00
-          STA  S1+OS,Y
-          STA  S2+OS,Y
+          STA  S1,Y                                     ; reloc: S1+OS
+          STA  S2,Y                                     ; reloc: S1+OS
           TXA
-          STA  S1+OS+1,Y
+          STA  S1+1,Y                                   ; reloc: S1+OS+1
           INX
           TXA
-          STA  S2+OS+1,Y
+          STA  S2+1,Y                                   ; reloc: S1+OS+1
           TYA
           ASL
           ASL
           ASL
           TAY
 RC_BLK    LDA  #00
-          STA  MOVLOOP+OS+1,Y
+          STA  MOVLOOP+1,Y                              ; reloc: MOVLOOP+OS+1
 RC_BNK    LDA  #00
-          STA  MOVLOOP+OS+4,Y
+          STA  MOVLOOP+4,Y                              ; reloc: MOVLOOP+OS+4
           LDA  CMD
           EOR  #%00000011     ;SETUP MAIN MEM. POINTERS
           AND  #%00000010
           TAY
           LDX  BUFFER+1
           LDA  BUFFER
-          STA  S1+OS,Y
-          STA  S2+OS,Y
+          STA  S1,Y                                     ; reloc: S1+OS
+          STA  S2,Y                                     ; reloc: S2+OS
           TXA
-          STA  S1+OS+1,Y
+          STA  S1+1,Y                                   ; reloc: S1+OS+1
           INX
           TXA
-          STA  S2+OS+1,Y
+          STA  S2+1,Y                                   ; reloc: S2+OS+1
           TYA
           ASL
           ASL
           ASL
           TAY
-          LDA  LCBNK1WE ; bugfix
-          STA  MOVLOOP+OS+1,Y
-          LDA  BLK0 ; bugfix
-          STA  MOVLOOP+OS+4,Y
+          LDA  #<LCBNK1WE                               ; bugfix: #LCBNK1WE
+          STA  MOVLOOP+1,Y                              ; reloc: MOVLOOP+OS+1
+          LDA  #<BLK0                                   ; bugfix: #BLK0
+          STA  MOVLOOP+4,Y                              ; reloc: MOVLOOP+OS+4
           PHP
           SEI                 ;DISABLE INTERUPTS
-          JSR  SWAP+OS        ;PUT R/W IN ZPAGE
+          JSR  SWAP           ;PUT R/W IN ZPAGE         ; reloc: SWAP+OS
           JSR  ZPAGE          ; DO READ/WRITE
-          JSR  SWAP+OS        ;PUT ZPAGE BACK
+          JSR  SWAP           ;PUT ZPAGE BACK           ; reloc: SWAP+OS
           PLP                 ;RESTORE INTERUPT FLAG
-          JMP  STATUS2+OS     ;AND EXIT
+          JMP  STATUS2        ;AND EXIT                 ; reloc: STATUS2+OS
 ;
 B16TBL    DB   $85,$86,$87,$8C,$8D,$8E,$8F
 ;
 SWAP      LDY  #RWR_END-RWR   ;GET LENGTH OF RWR
-SWAP2     LDX  RWR+OS,Y       ;AND SWAP ZPAGE
+SWAP2     LDX  RWR,Y          ;AND SWAP ZPAGE           ; reloc: RWR+OS
           LDA  ZPAGE,Y        ; WITH RWR
-          STA  RWR+OS,Y
+          STA  RWR,Y                                    ; reloc: RWR+OS
           STX  ZPAGE,Y
           DEY
           BPL  SWAP2
           RTS
 ;
-RWR       LDY  #00            ;INIT INDEX POINTER
-MOVLOOP   BIT  LC             ;ENABLE SOURCE
-          BIT  LC
-          LDA (S1-RWR),Y      ; bugfix: DB   LDA,S1-RWR     ;GET THE DATA
-          STA  T1-RWR
-          LDA (S2-RWR),Y      ; bugfix: DB   LDA,S2-RWR
-          STA  T2-RWR
+
+; work around merlin32 bug
+T1_DST EQU $34 ; reloc: T1-RWR
+T2_DST EQU $35 ; reloc: T2-RWR
+
+RWR       LDY  #00            ;INIT INDEX POINTER       ; $22C9
+MOVLOOP   BIT  LC             ;ENABLE SOURCE            ; *** SELF-MODIFIED by RC_BLK
+          BIT  LC                                       ; *** SELF-MODIFIED by RC_BNK
+          LDA (S1-RWR),Y      ;GET THE DATA             ; ($2C) bugfix: DB   LDA,S1-RWR
+          STA a:T1_DST                                  ; force 16-bit store, ca65 syntax: STA a:FOO
+          LDA (S2-RWR),Y                                ; ($34) bugfix: DB   LDA,S2-RWR
+          STA a:T2_DST                                  ; force 16-bit store
+
           BIT  LC             ;ENABLE DESTINATION
           BIT  LC
-          LDA  T1-RWR         ;SAVE THE DATA
-          STA  (D1-RWR),Y     ; bugfix: DB   STA,D1-RWR
-          LDA  T2-RWR
-          STA (D2-RWR),Y      ; bugfix: DB   STA,D2-RWR
+          LDA a:T1_DST        ;SAVE THE DATA            ; force 16-bit load
+          STA (D1-RWR),Y                                ; bugfix: DB   STA,D1-RWR
+          LDA a:T2_DST                                  ; force 16-bit load, NOTE: redundant load if order swapped
+          STA (D2-RWR),Y                                ; bugfix: DB   STA,D2-RWR
+
           INY                 ;DONE?
           BNE  MOVLOOP        ;NO...
           BIT  BLK0           ;RESET TO RAMCARD
@@ -356,7 +380,9 @@ T1        DB   0              ;DATA 1
 T2        DB   0              ;DATA 2
 RWR_END   EQU  *
 ;
-          DS   $100-<*,0 ; bugfix: >0-*,0
+          DS   $100-<*,0                                ; bugfix: >0-*,0
+
+_BWBUFR   EQU  *-OS+MAIN+$200                           ; HACK: magic number $200 due to page alignment
 BW_BUFR   EQU  *              ;I/O BUFFER
 
 ; NOTE: 512 bytes are used, but not allocated on disk

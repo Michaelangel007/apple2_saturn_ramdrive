@@ -1,4 +1,4 @@
-; Version 4
+; Version 5
 ; Utility macros because ca65 is crap out-of-the-box for Apple 2 assembly
 ; It is missing half of the essential pseudo directives.
 ; This fixes most of that oversight.
@@ -10,9 +10,16 @@
 ;.PC02 ; Uncomment if 65C02 is needed/wanted
 
 
+; Force APPLE 'text' to have high bit off
+; Will display as FLASHING characters
+.macro ASC text
+        .byte text
+.endmacro
+
+
 ; Force APPLE 'text' to have high bit on
 ; Will display as NORMAL characters
-.macro ASC text
+.macro APPLE text
     .repeat .strlen(text), I
         .byte   .strat(text, I) | $80
     .endrep
@@ -66,17 +73,17 @@
 _pc_:
 
     .if .const(_pc_)
-        ;.out .sprintf( "CONST * = %04X, reserving $%04X Bytes, New * = $%04X", _pc_, (size-_pc_), size )
+;       .out .sprintf( "CONST * = %04X, reserving $%04X Bytes, New * = $%04X", _pc_, (size-_pc_), size )
 
         .if (size < 0)
-;           .out .sprintf( "INFO: .ds size = %04X < 0, treating as %04X", size, _pc_+size )
+;           .out .sprintf( "INFO: .ds size = %04X < 0, treating as %04X", size, _pc_ - size )
             .ifblank fill
                  .res size+_pc_
             .else
                  .res size+_pc_,fill
             .endif
         .else
-;           .out .sprintf( "... reserving: %04X bytes ...", size )
+;         .out .sprintf( "... reserving: %04X bytes ...", size )
 ;            .res _pc_ - size, fill
             .ifblank fill
                 .res size
